@@ -1,0 +1,224 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: urlshortener
+          POSTGRES_PASSWORD: urlshortener
+          POSTGRES_DB: urlshortener_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run tests
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: urlshortener
+          DB_PASSWORD: urlshortener
+          DB_NAME: urlshortener_test
+          DB_SSLMODE: disable
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          REDIS_PASSWORD: ''
+          REDIS_DB: 0
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Generate coverage report
+        run: go tool cover -html=coverage.out -o coverage.html
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+          flags: backend
+          name: backend-coverage
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=5m
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Build binary
+        run: go build -v -o bin/server ./cmd/server
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-binary
+          path: bin/server
+          retention-days: 7
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: url-shortener-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [docker]
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: urlshortener
+          POSTGRES_PASSWORD: urlshortener
+          POSTGRES_DB: urlshortener
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Run migrations
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: urlshortener
+          DB_PASSWORD: urlshortener
+          DB_NAME: urlshortener
+          DB_SSLMODE: disable
+        run: |
+          PGPASSWORD=urlshortener psql -h localhost -U urlshortener -d urlshortener -f internal/database/migrations/001_init.sql
+
+      - name: Start application
+        env:
+          SERVER_HOST: 0.0.0.0
+          SERVER_PORT: 8080
+          BASE_URL: http://localhost:8080
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: urlshortener
+          DB_PASSWORD: urlshortener
+          DB_NAME: urlshortener
+          DB_SSLMODE: disable
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          REDIS_PASSWORD: ''
+          REDIS_DB: 0
+          RATE_LIMIT_RPM: 10
+        run: |
+          go build -o server ./cmd/server
+          ./server &
+          sleep 5
+
+      - name: Run integration tests
+        run: |
+          chmod +x test.sh
+          ./test.sh
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "Application logs:"
+          cat server.log || echo "No logs available"
