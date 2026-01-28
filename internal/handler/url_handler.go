@@ -64,7 +64,8 @@ func (h *URLHandler) RedirectToOriginal(w http.ResponseWriter, r *http.Request) 
 	// Get original URL
 	originalURL, err := h.urlService.GetOriginalURL(r.Context(), shortCode)
 	if err != nil {
-		http.Error(w, "URL not found", http.StatusNotFound)
+		// Redirect to frontend error page
+		http.Redirect(w, r, "/not-found", http.StatusSeeOther)
 		return
 	}
 
