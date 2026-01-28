@@ -1,7 +1,7 @@
 -- Create urls table
 CREATE TABLE IF NOT EXISTS urls (
     id BIGSERIAL PRIMARY KEY,
-    short_code VARCHAR(8) UNIQUE NOT NULL,
+    short_code VARCHAR(20) UNIQUE NOT NULL,
     original_url TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMP,
