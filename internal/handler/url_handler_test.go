@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -74,7 +75,8 @@ func TestGetAnalytics_MissingShortCode(t *testing.T) {
 	// Create a chi router context
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("code", "")
-	req = req.WithContext(chi.NewRouteContext().WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	req = req.WithContext(ctx)
 
 	handler.GetAnalytics(w, req)
 

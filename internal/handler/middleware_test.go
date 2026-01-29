@@ -4,13 +4,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 )
 
 func TestRateLimiter(t *testing.T) {
-	limiter := NewRateLimiter(2, time.Minute) // 2 requests per minute
+	limiter := NewRateLimiter(2) // 2 requests per minute
 
-	handler := limiter.Limit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RateLimitMiddleware(limiter)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -46,9 +45,9 @@ func TestRateLimiter(t *testing.T) {
 }
 
 func TestRateLimiter_DifferentIPs(t *testing.T) {
-	limiter := NewRateLimiter(1, time.Minute)
+	limiter := NewRateLimiter(1)
 
-	handler := limiter.Limit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RateLimitMiddleware(limiter)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -74,7 +73,7 @@ func TestRateLimiter_DifferentIPs(t *testing.T) {
 }
 
 func TestCORS(t *testing.T) {
-	handler := CORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := CORSMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
