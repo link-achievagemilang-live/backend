@@ -1,0 +1,210 @@
+name: Backend CD
+
+on:
+  # Trigger after CI workflow completes successfully
+  workflow_run:
+    workflows: ["Backend CI"]
+    types:
+      - completed
+    branches:
+      - main
+
+  # Allow manual deployment
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+jobs:
+  deploy:
+    name: Deploy to DigitalOcean
+    runs-on: ubuntu-latest
+    # Only run if CI workflow succeeded and it was a push to main
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set deployment environment
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          else
+            echo "environment=production" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to Droplet
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.DROPLET_USER || 'root' }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            # Navigate to project directory
+            cd /opt/url-shortener || exit 1
+            
+            echo "🚀 Starting deployment to ${{ steps.set-env.outputs.environment }}..."
+            
+            # Pull latest code
+            echo "📥 Pulling latest changes..."
+            git fetch origin
+            git reset --hard origin/main
+            
+            # Show current version
+            echo "📌 Current commit: $(git log -1 --oneline)"
+            
+            # Pull the latest Docker images
+            echo "🐳 Pulling latest Docker images..."
+            docker compose pull
+            
+            # Restart services with no downtime
+            echo "🔄 Restarting services..."
+            docker compose up -d --remove-orphans
+            
+            # Clean up old images
+            echo "🧹 Cleaning up old Docker images..."
+            docker image prune -af --filter "until=24h"
+            
+            echo "✅ Deployment steps completed"
+
+      - name: Verify Deployment
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.DROPLET_USER || 'root' }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            cd /opt/url-shortener
+            
+            # Wait for services to start
+            echo "⏳ Waiting for services to start..."
+            sleep 10
+            
+            # Check if containers are running
+            echo "🔍 Checking container status..."
+            RUNNING_CONTAINERS=$(docker compose ps --services --filter "status=running" | wc -l)
+            TOTAL_CONTAINERS=$(docker compose ps --services | wc -l)
+            
+            echo "Running containers: $RUNNING_CONTAINERS/$TOTAL_CONTAINERS"
+            docker compose ps
+            
+            if [ "$RUNNING_CONTAINERS" -lt "$TOTAL_CONTAINERS" ]; then
+              echo "❌ Deployment failed: Not all containers are running"
+              docker compose logs --tail=50
+              exit 1
+            fi
+            
+            # Health check on backend service
+            echo "💓 Checking backend health endpoint..."
+            HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health || echo "000")
+            
+            if [ "$HEALTH_CHECK" != "200" ]; then
+              echo "❌ Backend health check failed (HTTP $HEALTH_CHECK)"
+              docker compose logs backend --tail=50
+              exit 1
+            fi
+            
+            # Check database connectivity
+            echo "🗄️  Checking database connectivity..."
+            docker compose exec -T postgres pg_isready -U urlshortener || {
+              echo "❌ Database health check failed"
+              exit 1
+            }
+            
+            # Check Redis connectivity
+            echo "🔴 Checking Redis connectivity..."
+            docker compose exec -T redis redis-cli ping | grep -q PONG || {
+              echo "❌ Redis health check failed"
+              exit 1
+            }
+            
+            echo "✅ All health checks passed!"
+            echo "📊 Deployment Summary:"
+            echo "   - Environment: ${{ steps.set-env.outputs.environment }}"
+            echo "   - Commit: $(git log -1 --oneline)"
+            echo "   - Backend Status: $(curl -s http://localhost:8080/health | jq -r '.status' || echo 'unknown')"
+            echo "   - Containers Running: $RUNNING_CONTAINERS/$TOTAL_CONTAINERS"
+
+      - name: Rollback on Failure
+        if: failure()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.DROPLET_USER || 'root' }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            cd /opt/url-shortener
+            echo "⚠️  Deployment failed, initiating rollback..."
+            
+            # Get previous commit
+            echo "📋 Recent commits:"
+            git log -3 --oneline
+            
+            # Rollback to previous commit
+            echo "⏪ Rolling back to previous version..."
+            git reset --hard HEAD~1
+            
+            # Restart with old version
+            echo "🔄 Restarting services with previous version..."
+            docker compose up -d
+            
+            # Wait and verify
+            sleep 10
+            echo "🔍 Verifying rollback..."
+            docker compose ps
+            
+            # Quick health check after rollback
+            HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health || echo "000")
+            if [ "$HEALTH_CHECK" = "200" ]; then
+              echo "✅ Rollback successful - service is healthy"
+            else
+              echo "⚠️  Rollback completed but health check failed - manual intervention may be needed"
+            fi
+
+      - name: Log Deployment Status
+        if: always()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.DROPLET_USER || 'root' }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            # Create log directory if it doesn't exist
+            mkdir -p /var/log
+            
+            # Log deployment status
+            if [ "${{ job.status }}" = "success" ]; then
+              echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ Deployment successful - Commit: $(cd /opt/url-shortener && git log -1 --oneline) - Triggered by: ${{ github.actor }}" >> /var/log/url-shortener-deployments.log
+            else
+              echo "[$(date '+%Y-%m-%d %H:%M:%S')] ❌ Deployment failed - Rolled back - Triggered by: ${{ github.actor }}" >> /var/log/url-shortener-deployments.log
+            fi
+            
+            # Keep only last 100 lines
+            tail -n 100 /var/log/url-shortener-deployments.log > /tmp/deployments.log && mv /tmp/deployments.log /var/log/url-shortener-deployments.log
+
+      - name: Notify Deployment Status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Deployment to ${{ steps.set-env.outputs.environment }} completed successfully!"
+          else
+            echo "❌ Deployment to ${{ steps.set-env.outputs.environment }} failed and was rolled back."
+          fi
+
