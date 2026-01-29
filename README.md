@@ -2,8 +2,8 @@
 
 High-performance URL shortener service built with Go, PostgreSQL, and Redis.
 
-![CI](https://github.com/yourusername/url-shortener-backend/workflows/Backend%20CI%2FCD/badge.svg)
-[![codecov](https://codecov.io/gh/yourusername/url-shortener-backend/branch/main/graph/badge.svg)](https://codecov.io/gh/yourusername/url-shortener-backend)
+![CI](https://github.com/link-achievagemilang-live/backend/workflows/Backend%20CI%2FCD/badge.svg)
+[![codecov](https://codecov.io/gh/link-achievagemilang-live/backend/branch/main/graph/badge.svg)](https://codecov.io/gh/link-achievagemilang-live/backend)
 
 ## Features
 
@@ -84,10 +84,6 @@ go test -coverprofile=coverage.out ./...
 # Integration tests
 ./test.sh
 ```
-
-## CI/CD
-
-See [CI_CD.md](CI_CD.md) for detailed CI/CD documentation.
 
 ## Tech Stack
 
