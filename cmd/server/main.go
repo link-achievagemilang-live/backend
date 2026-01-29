@@ -1,3 +1,4 @@
+// Package main is the entry point for the URL shortener backend server.
 package main
 
 import (

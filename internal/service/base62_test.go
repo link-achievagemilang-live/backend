@@ -89,6 +89,6 @@ func BenchmarkEncode(b *testing.B) {
 
 func BenchmarkDecode(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		Decode("8m0Kx")
+		_, _ = Decode("8m0Kx")
 	}
 }
