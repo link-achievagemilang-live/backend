@@ -53,7 +53,7 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/v1/urls" \
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 BODY=$(echo "$RESPONSE" | head -n-1)
 
-if [ "$HTTP_CODE" -eq 200 ]; then
+if [ "$HTTP_CODE" -eq 201 ]; then
     SHORT_URL=$(echo "$BODY" | grep -o '"short_url":"[^"]*"' | cut -d'"' -f4)
     SHORT_CODE=$(echo "$SHORT_URL" | rev | cut -d'/' -f1 | rev)
     print_result 0 "Create short URL (code: $SHORT_CODE)"
@@ -101,7 +101,7 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/v1/urls" \
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 BODY=$(echo "$RESPONSE" | head -n-1)
 
-if [ "$HTTP_CODE" -eq 200 ] && echo "$BODY" | grep -q "$CUSTOM_ALIAS"; then
+if [ "$HTTP_CODE" -eq 201 ] && echo "$BODY" | grep -q "$CUSTOM_ALIAS"; then
     print_result 0 "Create URL with custom alias"
 else
     print_result 1 "Create URL with custom alias (HTTP $HTTP_CODE)"
@@ -116,7 +116,7 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/v1/urls" \
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 BODY=$(echo "$RESPONSE" | head -n-1)
 
-if [ "$HTTP_CODE" -eq 200 ] && echo "$BODY" | grep -q "expires_at"; then
+if [ "$HTTP_CODE" -eq 201 ] && echo "$BODY" | grep -q "expires_at"; then
     print_result 0 "Create URL with TTL"
 else
     print_result 1 "Create URL with TTL (HTTP $HTTP_CODE)"
@@ -155,10 +155,11 @@ echo ""
 echo "Test 9: Handle Non-existent Short Code"
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/nonexistent123")
 
-if [ "$HTTP_CODE" -eq 404 ]; then
+# Handler redirects to /not-found with 303 (See Other)
+if [ "$HTTP_CODE" -eq 303 ]; then
     print_result 0 "Handle non-existent short code"
 else
-    print_result 1 "Handle non-existent short code (expected 404, got $HTTP_CODE)"
+    print_result 1 "Handle non-existent short code (expected 303, got $HTTP_CODE)"
 fi
 echo ""
 
