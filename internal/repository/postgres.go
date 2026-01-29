@@ -1,3 +1,4 @@
+// Package repository provides data persistence layer implementations.
 package repository
 
 import (
@@ -8,6 +9,7 @@ import (
 
 	"url-shortener/internal/domain"
 
+	// PostgreSQL driver
 	_ "github.com/lib/pq"
 )
 

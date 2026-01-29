@@ -1,3 +1,4 @@
+// Package handler provides HTTP request handlers and middleware.
 package handler
 
 import (

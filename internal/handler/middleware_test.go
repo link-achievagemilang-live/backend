@@ -6,16 +6,18 @@ import (
 	"testing"
 )
 
+const testIP = "192.168.1.1:1234"
+
 func TestRateLimiter(t *testing.T) {
 	limiter := NewRateLimiter(2) // 2 requests per minute
 
-	handler := RateLimitMiddleware(limiter)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RateLimitMiddleware(limiter)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	// First request should succeed
 	req1 := httptest.NewRequest(http.MethodPost, "/api/v1/urls", nil)
-	req1.RemoteAddr = "192.168.1.1:1234"
+	req1.RemoteAddr = testIP
 	w1 := httptest.NewRecorder()
 	handler.ServeHTTP(w1, req1)
 
@@ -25,7 +27,7 @@ func TestRateLimiter(t *testing.T) {
 
 	// Second request should succeed
 	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/urls", nil)
-	req2.RemoteAddr = "192.168.1.1:1234"
+	req2.RemoteAddr = testIP
 	w2 := httptest.NewRecorder()
 	handler.ServeHTTP(w2, req2)
 
@@ -35,7 +37,7 @@ func TestRateLimiter(t *testing.T) {
 
 	// Third request should be rate limited
 	req3 := httptest.NewRequest(http.MethodPost, "/api/v1/urls", nil)
-	req3.RemoteAddr = "192.168.1.1:1234"
+	req3.RemoteAddr = testIP
 	w3 := httptest.NewRecorder()
 	handler.ServeHTTP(w3, req3)
 
@@ -47,13 +49,13 @@ func TestRateLimiter(t *testing.T) {
 func TestRateLimiter_DifferentIPs(t *testing.T) {
 	limiter := NewRateLimiter(1)
 
-	handler := RateLimitMiddleware(limiter)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RateLimitMiddleware(limiter)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	// Request from IP 1
 	req1 := httptest.NewRequest(http.MethodPost, "/api/v1/urls", nil)
-	req1.RemoteAddr = "192.168.1.1:1234"
+	req1.RemoteAddr = testIP
 	w1 := httptest.NewRecorder()
 	handler.ServeHTTP(w1, req1)
 
@@ -73,7 +75,7 @@ func TestRateLimiter_DifferentIPs(t *testing.T) {
 }
 
 func TestCORS(t *testing.T) {
-	handler := CORSMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := CORSMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 

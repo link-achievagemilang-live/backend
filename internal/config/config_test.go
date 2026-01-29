@@ -7,15 +7,15 @@ import (
 
 func TestLoad(t *testing.T) {
 	// Set test environment variables
-	os.Setenv("SERVER_HOST", "testhost")
-	os.Setenv("SERVER_PORT", "9999")
-	os.Setenv("DB_HOST", "testdb")
-	os.Setenv("REDIS_HOST", "testredis")
+	_ = os.Setenv("SERVER_HOST", "testhost")
+	_ = os.Setenv("SERVER_PORT", "9999")
+	_ = os.Setenv("DB_HOST", "testdb")
+	_ = os.Setenv("REDIS_HOST", "testredis")
 	defer func() {
-		os.Unsetenv("SERVER_HOST")
-		os.Unsetenv("SERVER_PORT")
-		os.Unsetenv("DB_HOST")
-		os.Unsetenv("REDIS_HOST")
+		_ = os.Unsetenv("SERVER_HOST")
+		_ = os.Unsetenv("SERVER_PORT")
+		_ = os.Unsetenv("DB_HOST")
+		_ = os.Unsetenv("REDIS_HOST")
 	}()
 
 	cfg := Load()

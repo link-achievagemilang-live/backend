@@ -29,7 +29,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to PostgreSQL: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("Error closing database connection: %v", err)
+		}
+	}()
 
 	// Run migrations
 	if err := runMigrations(db); err != nil {
@@ -38,7 +42,11 @@ func main() {
 
 	// Initialize Redis
 	redisClient := initRedis(cfg.Redis)
-	defer redisClient.Close()
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			log.Printf("Error closing Redis connection: %v", err)
+		}
+	}()
 
 	// Test Redis connection
 	ctx := context.Background()
@@ -71,12 +79,6 @@ func main() {
 
 	// Redirect endpoint (catch-all for short codes)
 	mux.HandleFunc("/", urlHandler.RedirectToOriginal)
-
-	// Apply middleware
-	var handlerChain http.Handler = mux
-	handlerChain = handler.CORSMiddleware(handlerChain)
-	handlerChain = handler.LoggingMiddleware(handlerChain)
-	handlerChain = handler.RecoveryMiddleware(handlerChain)
 
 	// Apply rate limiting only to the create URL endpoint
 	rateLimitedMux := http.NewServeMux()

@@ -99,7 +99,7 @@ func (h *URLHandler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 }
 
 // HealthCheck handles GET /health
-func (h *URLHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
+func (h *URLHandler) HealthCheck(w http.ResponseWriter, _ *http.Request) {
 	respondWithJSON(w, http.StatusOK, map[string]string{"status": "healthy"})
 }
 
@@ -108,13 +108,13 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	response, err := json.Marshal(payload)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal Server Error"))
+		_, _ = w.Write([]byte("Internal Server Error"))
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	w.Write(response)
+	_, _ = w.Write(response)
 }
 
 // respondWithError sends an error response
