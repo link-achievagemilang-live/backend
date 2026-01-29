@@ -2,7 +2,8 @@
 
 High-performance URL shortener service built with Go, PostgreSQL, and Redis.
 
-![CI](https://github.com/link-achievagemilang-live/backend/workflows/Backend%20CI%2FCD/badge.svg)
+![CI](https://github.com/link-achievagemilang-live/backend/workflows/Backend%20CI/badge.svg)
+![CD](https://github.com/link-achievagemilang-live/backend/workflows/Backend%20CD/badge.svg)
 [![codecov](https://codecov.io/gh/link-achievagemilang-live/backend/branch/main/graph/badge.svg)](https://codecov.io/gh/link-achievagemilang-live/backend)
 
 ## Features
